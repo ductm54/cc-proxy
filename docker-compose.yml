@@ -1,0 +1,35 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    environment:
+      CLICKHOUSE_DB: cc_proxy
+      CLICKHOUSE_USER: user
+      CLICKHOUSE_PASSWORD: password
+    ports:
+      - "28123:8123"
+      - "29000:9000"
+    volumes:
+      - .volumes/clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  cc-proxy:
+    profiles: [proxy]
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      CC_PROXY_ADDR: "0.0.0.0:8787"
+      CC_PROXY_TOKENS_FILE: /data/.credentials.json
+      CC_PROXY_AUTH_CONFIG: /data/auth.json
+      CC_PROXY_CLICKHOUSE_DSN: "clickhouse://user:password@clickhouse:9000/cc_proxy"
+    volumes:
+      - .config:/data
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped

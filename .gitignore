@@ -1,0 +1,7 @@
+*.mitm
+.claude
+.volumes
+.config
+web/dist
+web/node_modules
+/cc-proxy

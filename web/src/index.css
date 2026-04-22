@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-chart-cyan: #06b6d4;
+  --color-chart-amber: #f59e0b;
+  --color-chart-violet: #8b5cf6;
+  --color-chart-rose: #f43f5e;
+  --color-chart-emerald: #10b981;
+  --color-chart-sky: #0ea5e9;
+  --color-chart-orange: #f97316;
+  --color-chart-pink: #ec4899;
+}

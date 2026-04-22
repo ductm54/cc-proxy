@@ -1,0 +1,8 @@
+/cc-proxy
+web/dist
+web/node_modules
+.config
+.volumes
+.claude
+*.mitm
+docker-compose.yml
