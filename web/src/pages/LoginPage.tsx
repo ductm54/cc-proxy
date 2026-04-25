@@ -31,18 +31,29 @@ export default function LoginPage() {
   return (
     <Card>
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-slate-50 mb-2">cc-proxy</h1>
-        <p className="text-sm text-slate-400 mb-8">Sign in to get your API proxy token</p>
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div
+            className="w-9 h-9 rounded-lg grid place-items-center text-base font-extrabold"
+            style={{
+              background: 'linear-gradient(135deg, #5EEAD4 0%, #3FB6C5 100%)',
+              color: '#062321',
+            }}
+          >
+            k
+          </div>
+          <h1 className="text-2xl font-semibold text-app-text" style={{ letterSpacing: '-0.01em' }}>cc-proxy</h1>
+        </div>
+        <p className="text-sm text-app-mute mb-8">Sign in to get your API proxy token</p>
         <a
           href="/auth/start"
-          className="inline-flex items-center gap-2.5 px-7 py-3 bg-white text-slate-800 rounded-lg text-sm font-semibold hover:bg-slate-200 transition-colors"
+          className="inline-flex items-center gap-2.5 px-7 py-3 bg-app-text text-app-bg rounded-lg text-sm font-semibold hover:bg-white transition-colors"
         >
           <GoogleIcon className="w-5 h-5" />
           Sign in with Google
         </a>
         {domain && (
-          <p className="mt-6 text-xs text-slate-500">
-            Restricted to <strong className="text-slate-400">@{domain}</strong> accounts
+          <p className="mt-6 text-xs text-app-dim">
+            Restricted to <strong className="text-app-mute font-mono">@{domain}</strong> accounts
           </p>
         )}
       </div>

@@ -23,32 +23,27 @@ function formatReset(iso: string): string {
   return `Resets ${dateStr}, ${timeStr}`
 }
 
-function barColor(pct: number): string {
-  if (pct >= 80) return 'bg-red-500'
-  if (pct >= 60) return 'bg-yellow-500'
-  return 'bg-emerald-500'
-}
-
 export default function QuotaBar({ label, utilization, resetTime, status }: QuotaBarProps) {
   const pct = Math.round(utilization)
   const blocked = status === 'blocked'
+  const danger = pct >= 80 || blocked
 
   return (
-    <div className="mb-4">
+    <div>
       <div className="flex justify-between items-baseline mb-1.5">
-        <span className="text-sm text-slate-300">{label}</span>
-        <span className={`text-xs font-mono ${blocked ? 'text-red-400' : 'text-slate-400'}`}>
+        <span className="text-xs text-app-text">{label}</span>
+        <span className={`text-[11px] font-mono tabular-nums ${danger ? 'text-chart-rose' : 'text-app-mute'}`}>
           {blocked ? 'BLOCKED' : `${pct}% used`}
         </span>
       </div>
-      <div className="w-full bg-slate-700 rounded-full h-2.5">
+      <div className="h-1.5 bg-app-surface-2 rounded-full overflow-hidden">
         <div
-          className={`h-2.5 rounded-full transition-all duration-500 ${barColor(pct)}`}
-          style={{ width: `${Math.min(pct, 100)}%` }}
+          className={`h-full rounded-full transition-all duration-500 ${danger ? 'bg-chart-rose' : pct > 0 ? 'bg-app-accent' : 'bg-app-dim'}`}
+          style={{ width: `${Math.max(pct === 0 ? 0 : pct, 1.5)}%` }}
         />
       </div>
       {resetTime && (
-        <p className="text-xs text-slate-500 mt-1">{formatReset(resetTime)}</p>
+        <p className="text-[10px] text-app-dim mt-1.5 font-mono">{formatReset(resetTime)}</p>
       )}
     </div>
   )

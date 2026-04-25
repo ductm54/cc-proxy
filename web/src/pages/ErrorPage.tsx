@@ -9,13 +9,14 @@ export default function ErrorPage() {
   return (
     <Card>
       <div className="text-center">
-        <h1 className="text-xl font-bold text-red-400 mb-3">Error {status}</h1>
-        <p className="text-sm text-slate-400 leading-relaxed">{message}</p>
+        <p className="text-[10px] uppercase tracking-[0.14em] text-app-dim font-semibold mb-2">Error</p>
+        <h1 className="text-3xl font-mono font-semibold text-chart-rose mb-3 tabular-nums">{status}</h1>
+        <p className="text-sm text-app-mute leading-relaxed">{message}</p>
         <a
           href="/"
-          className="inline-block mt-6 px-6 py-2.5 bg-slate-700 text-slate-200 rounded-lg text-sm font-semibold hover:bg-slate-600 transition-colors"
+          className="inline-block mt-6 px-6 py-2.5 bg-app-surface-2 border border-app-line text-app-text rounded-lg text-sm font-medium hover:border-app-accent/40 hover:text-app-accent transition-colors"
         >
-          Try Again
+          Try again
         </a>
       </div>
     </Card>

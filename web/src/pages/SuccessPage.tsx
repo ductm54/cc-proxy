@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import CopyBlock from '../components/CopyBlock'
 import QuotaBar from '../components/QuotaBar'
 const UsageDashboard = lazy(() => import('../components/UsageDashboard'))
 import DateRangePicker, { buildUsageQuery } from '../components/DateRangePicker'
@@ -27,6 +26,8 @@ interface UserSummary {
   cache_read_tokens: number
   total_cost_usd: number
 }
+
+const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000
 
 function saveSession(email: string, token: string, proxyURL: string, expiresAt: string) {
   localStorage.setItem('cc-proxy-session', JSON.stringify({ email, token, proxyURL, expiresAt }))
@@ -126,51 +127,70 @@ export default function SuccessPage() {
   const mins = Math.floor((remaining % 3_600_000) / 60_000)
   const secs = Math.floor((remaining % 60_000) / 1000)
   const expired = remaining <= 0 && expiresMs > 0
+  const sessionPct = expiresMs > 0 ? Math.max(0, Math.min(100, (remaining / SESSION_WINDOW_MS) * 100)) : 0
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 font-sans p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-app-bg text-app-text font-sans p-4 md:p-6 lg:p-8" style={{ letterSpacing: '-0.005em' }}>
       <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row gap-5 lg:h-[calc(100vh-4rem)]">
 
-        {/* Left sidebar: Connection + Quota */}
-        <aside className="lg:w-72 xl:w-80 shrink-0 flex flex-col gap-4 lg:overflow-y-auto">
-          {/* Connection Info */}
-          <div className="bg-slate-800 rounded-xl p-5 shadow-2xl border border-slate-700/30">
-            <div className="flex items-center gap-2.5 mb-1">
-              <span className={`flex h-2 w-2 rounded-full ${expired ? 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]' : 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.6)]'}`} />
-              <h1 className="text-sm font-semibold text-slate-100">{expired ? 'Expired' : 'Connected'}</h1>
+        {/* Sidebar */}
+        <aside className="lg:w-80 shrink-0 bg-app-surface border border-app-line rounded-xl px-5 py-6 flex flex-col gap-6 lg:overflow-y-auto">
+          {/* Logo */}
+          <div className="flex items-center gap-3 pb-4 border-b border-app-line">
+            <div
+              className="w-7 h-7 rounded-lg grid place-items-center text-[14px] font-extrabold"
+              style={{
+                background: 'linear-gradient(135deg, #5EEAD4 0%, #3FB6C5 100%)',
+                color: '#062321',
+              }}
+            >
+              k
             </div>
-            <p className="text-xs text-slate-400 mb-4">
-              <strong className="text-slate-200">{email}</strong>
-            </p>
-
-            {/* Countdown */}
-            <div className={`rounded-lg p-3 mb-4 text-center ${expired ? 'bg-red-950/40 border border-red-800/30' : 'bg-slate-900/50 border border-slate-700/30'}`}>
-              {expired ? (
-                <p className="text-xs text-red-400 font-medium">Session expired — please sign in again</p>
-              ) : (
-                <>
-                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1.5">Expires in</p>
-                  <div className="flex items-center justify-center gap-1.5 font-mono">
-                    <TimeUnit value={hours} label="h" />
-                    <span className="text-slate-600 text-sm">:</span>
-                    <TimeUnit value={mins} label="m" />
-                    <span className="text-slate-600 text-sm">:</span>
-                    <TimeUnit value={secs} label="s" />
-                  </div>
-                </>
-              )}
+            <div className="leading-tight">
+              <div className="text-sm font-semibold text-app-text">cc-proxy</div>
+              <div className="text-[11px] text-app-mute mt-0.5">Dashboard</div>
             </div>
-
-            <CopyBlock id="code-claude" label="Use with Claude Code">
-              {`ANTHROPIC_BASE_URL="${proxyURL}" \\\nclaude`}
-            </CopyBlock>
           </div>
 
-          {/* Quota */}
-          <div className="bg-slate-800 rounded-xl p-5 shadow-2xl border border-slate-700/30">
-            <h2 className="text-sm font-semibold text-slate-100 mb-4">Quota</h2>
-            {account && (account.five_hour || account.seven_day) ? (
+          {/* Connection */}
+          <SidebarBlock eyebrow="Connection">
+            <div className="flex items-center gap-2 mb-2.5">
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${expired ? 'bg-chart-rose' : 'bg-app-accent'}`}
+                style={{ boxShadow: expired ? '0 0 10px #f43f5e' : '0 0 10px #5EEAD4' }}
+              />
+              <span className="text-sm text-app-text font-medium">{expired ? 'Expired' : 'Connected'}</span>
+            </div>
+            <div className="text-xs text-app-mute font-mono truncate">{email}</div>
+          </SidebarBlock>
+
+          {/* Session expires */}
+          <SidebarBlock eyebrow="Session expires in">
+            {expired ? (
+              <p className="text-xs text-chart-rose">Session expired — please sign in again</p>
+            ) : (
               <>
+                <div className="flex items-baseline gap-1 font-mono">
+                  <TimeUnit n={hours} unit="h" />
+                  <span className="text-app-dim text-2xl font-light">:</span>
+                  <TimeUnit n={mins} unit="m" />
+                  <span className="text-app-dim text-2xl font-light">:</span>
+                  <TimeUnit n={secs} unit="s" />
+                </div>
+                <div className="h-1 bg-app-surface-2 rounded-full mt-2.5 overflow-hidden">
+                  <div
+                    className="h-full bg-app-accent rounded-full transition-[width] duration-1000 ease-linear"
+                    style={{ width: `${sessionPct}%` }}
+                  />
+                </div>
+              </>
+            )}
+          </SidebarBlock>
+
+          {/* Quota */}
+          <SidebarBlock eyebrow="Quota">
+            {account && (account.five_hour || account.seven_day) ? (
+              <div className="flex flex-col gap-3">
                 {account.five_hour && (
                   <QuotaBar
                     label="Session (5 hr)"
@@ -187,19 +207,32 @@ export default function SuccessPage() {
                     status={account.seven_day.utilization >= 100 ? 'blocked' : 'ok'}
                   />
                 )}
-              </>
+              </div>
             ) : (
-              <p className="text-xs text-slate-500">No quota data yet</p>
+              <p className="text-xs text-app-dim">No quota data yet</p>
             )}
+          </SidebarBlock>
+
+          {/* Setup snippet */}
+          <SetupSnippet proxyURL={proxyURL} />
+
+          {/* Logout */}
+          <div className="mt-auto pt-4 border-t border-app-line">
+            <button
+              onClick={invalidateSession}
+              className="w-full text-left text-xs text-app-mute hover:text-app-text transition-colors py-1.5 cursor-pointer"
+            >
+              Sign out
+            </button>
           </div>
         </aside>
 
-        {/* Right main area: Usage Analytics */}
-        <main className="flex-1 min-w-0 bg-slate-800 rounded-xl p-5 md:p-6 shadow-2xl border border-slate-700/30 lg:overflow-y-auto">
-          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        {/* Main */}
+        <main className="flex-1 min-w-0 bg-app-surface border border-app-line rounded-xl px-6 py-6 lg:overflow-y-auto">
+          <div className="flex items-end justify-between mb-5 flex-wrap gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">Usage Analytics</h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">Detailed breakdown of proxy usage</p>
+              <h2 className="text-[22px] font-semibold text-app-text" style={{ letterSpacing: '-0.01em' }}>Usage Analytics</h2>
+              <p className="text-[13px] text-app-mute mt-1">Detailed breakdown of proxy usage</p>
             </div>
             <DateRangePicker
               active={period}
@@ -212,7 +245,7 @@ export default function SuccessPage() {
               }}
             />
           </div>
-          <Suspense fallback={<p className="text-sm text-slate-500 py-8 text-center">Loading charts…</p>}>
+          <Suspense fallback={<p className="text-sm text-app-mute py-8 text-center">Loading charts…</p>}>
             <UsageDashboard users={users} loading={usageLoading} />
           </Suspense>
         </main>
@@ -222,13 +255,65 @@ export default function SuccessPage() {
   )
 }
 
-function TimeUnit({ value, label }: { value: number; label: string }) {
+function SidebarBlock({ eyebrow, children, action }: { eyebrow: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <span className="inline-flex items-baseline gap-0.5">
-      <span className="text-lg font-semibold text-slate-100 tabular-nums w-7 text-center">
-        {String(value).padStart(2, '0')}
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-dim">{eyebrow}</div>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function TimeUnit({ n, unit }: { n: number; unit: string }) {
+  return (
+    <span className="inline-flex items-baseline">
+      <span className="text-[28px] font-medium text-app-text tabular-nums">
+        {String(n).padStart(2, '0')}
       </span>
-      <span className="text-[10px] text-slate-500">{label}</span>
+      <span className="text-xs text-app-dim ml-0.5">{unit}</span>
     </span>
+  )
+}
+
+function SetupSnippet({ proxyURL }: { proxyURL: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(`ANTHROPIC_BASE_URL="${proxyURL}" \\\nclaude`).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <SidebarBlock
+      eyebrow="Use with Claude Code"
+      action={
+        <button
+          onClick={handleCopy}
+          className="bg-transparent border border-app-line text-app-accent text-[10px] font-semibold px-2.5 py-0.5 rounded-md cursor-pointer hover:bg-app-accent/10 transition-colors"
+          style={{ letterSpacing: '0.04em' }}
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      }
+    >
+      <div
+        className="bg-app-code-bg border border-app-line rounded-lg px-3.5 py-3 font-mono text-[11px] leading-[1.7] whitespace-pre-wrap break-all"
+        style={{ color: '#C5CCD7' }}
+      >
+        <span className="text-app-dim">$ </span>
+        <span className="text-chart-violet">ANTHROPIC_BASE_URL</span>
+        <span>=</span>
+        <span className="text-app-accent">"{proxyURL}"</span>
+        <span className="text-app-mute"> {'\\'}</span>
+        {'\n  '}
+        <span>claude</span>
+      </div>
+      <div className="text-[10px] text-app-dim mt-2">
+        Routes Claude Code through your proxy
+      </div>
+    </SidebarBlock>
   )
 }

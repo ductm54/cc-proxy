@@ -20,11 +20,13 @@ interface UsageDashboardProps {
   loading: boolean
 }
 
-const PALETTE = [
-  '#06b6d4', '#f59e0b', '#8b5cf6', '#f43f5e',
-  '#10b981', '#0ea5e9', '#f97316', '#ec4899',
-  '#a78bfa', '#34d399', '#fbbf24', '#fb7185',
-]
+const CHART_COLORS = ['#5EEAD4', '#F2B45A', '#A78BFA', '#7DD3FC', '#10b981', '#f43f5e', '#f97316', '#ec4899']
+const TOKEN_COLORS = {
+  input: '#3FB6C5',
+  output: '#F2B45A',
+  cacheWrite: '#A78BFA',
+  cacheRead: '#5EEAD4',
+}
 
 function fmtTokens(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
@@ -127,7 +129,7 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
           {[0, 1, 2, 3, 4].map(i => (
             <div
               key={i}
-              className="w-1.5 h-8 bg-chart-cyan/40 rounded-full"
+              className="w-1.5 h-8 bg-app-accent/40 rounded-full"
               style={{
                 animation: 'pulse-bar 1s ease-in-out infinite',
                 animationDelay: `${i * 0.12}s`,
@@ -148,51 +150,34 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
   if (!users.length || !stats) {
     return (
       <div className="text-center py-16">
-        <div className="text-slate-600 text-4xl mb-3 font-mono">∅</div>
-        <p className="text-sm text-slate-500">No usage data for this period</p>
+        <div className="text-app-dim text-4xl mb-3 font-mono">∅</div>
+        <p className="text-sm text-app-mute">No usage data for this period</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-5">
-      {/* View Toggle */}
-      <div className="flex gap-1 bg-slate-900/60 rounded-lg p-0.5 w-fit">
-        <button
-          onClick={() => setView('charts')}
-          className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
-            view === 'charts'
-              ? 'bg-slate-700 text-slate-100 shadow-sm'
-              : 'text-slate-500 hover:text-slate-300'
-          }`}
-        >
-          Charts
-        </button>
-        <button
-          onClick={() => setView('table')}
-          className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
-            view === 'table'
-              ? 'bg-slate-700 text-slate-100 shadow-sm'
-              : 'text-slate-500 hover:text-slate-300'
-          }`}
-        >
-          Table
-        </button>
-      </div>
+    <div className="space-y-4">
+      {/* Charts/Table segmented toggle */}
+      <Segmented
+        options={['Charts', 'Table']}
+        value={view === 'charts' ? 'Charts' : 'Table'}
+        onChange={v => setView(v === 'Charts' ? 'charts' : 'table')}
+      />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Total Cost" value={`$${stats.totalCost.toFixed(2)}`} accent="text-emerald-400" />
-        <StatCard label="Requests" value={fmtTokens(stats.totalRequests)} accent="text-chart-cyan" />
-        <StatCard label="Active Users" value={String(stats.activeUsers)} accent="text-chart-amber" />
-        <StatCard label="Models Used" value={String(stats.modelCount)} accent="text-chart-violet" />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <Kpi label="Total Cost"    value={`$${stats.totalCost.toFixed(2)}`} accent="text-app-accent" />
+        <Kpi label="Requests"      value={fmtTokens(stats.totalRequests)}   accent="text-chart-amber" />
+        <Kpi label="Active Users"  value={String(stats.activeUsers)}        accent="text-chart-violet" />
+        <Kpi label="Models Used"   value={String(stats.modelCount)}         accent="text-chart-sky" />
       </div>
 
       {view === 'charts' ? (
-        <div className="space-y-5">
+        <div className="space-y-3.5">
           {/* Row 1: Cost by User + Model Distribution */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <ChartPanel title="Cost by User" subtitle="Total spend per user">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            <ChartPanel title="Cost by user" subtitle="Total spend per user">
               <ResponsiveContainer width="100%" height={Math.max(200, stats.costByUserData.length * 36 + 20)}>
                 <BarChart
                   data={stats.costByUserData}
@@ -205,21 +190,21 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                     type="category"
                     dataKey="shortEmail"
                     width={100}
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                    tick={{ fill: '#8A93A2', fontSize: 11, fontFamily: 'JetBrains Mono' }}
                     axisLine={false}
                     tickLine={false}
                   />
-                  <Tooltip content={<CostTooltip />} cursor={{ fill: 'rgba(148,163,184,0.06)' }} />
+                  <Tooltip content={<CostTooltip />} cursor={{ fill: 'rgba(94,234,212,0.05)' }} />
                   <Bar dataKey="cost" radius={[0, 4, 4, 0]} maxBarSize={22}>
                     {stats.costByUserData.map((_, i) => (
-                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.85} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.85} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
 
-            <ChartPanel title="Model Popularity" subtitle="Cost distribution across models">
+            <ChartPanel title="Model popularity" subtitle="Cost distribution across models">
               <div className="flex items-center justify-center h-full min-h-[200px]">
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
@@ -235,7 +220,7 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                       strokeWidth={0}
                     >
                       {stats.modelData.map((_, i) => (
-                        <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.9} />
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.9} />
                       ))}
                     </Pie>
                     <Tooltip content={<ModelTooltip />} />
@@ -246,9 +231,9 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                     <div key={m.model} className="flex items-center gap-2 text-xs">
                       <span
                         className="w-2.5 h-2.5 rounded-sm shrink-0"
-                        style={{ backgroundColor: PALETTE[i % PALETTE.length] }}
+                        style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
                       />
-                      <span className="text-slate-400 font-mono truncate max-w-[120px]">{m.shortModel}</span>
+                      <span className="text-app-mute font-mono truncate max-w-[120px]">{m.shortModel}</span>
                     </div>
                   ))}
                 </div>
@@ -256,9 +241,9 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
             </ChartPanel>
           </div>
 
-          {/* Row 2: Most Active Users + Token Heatmap */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <ChartPanel title="Most Active" subtitle="Requests per user">
+          {/* Row 2: Most Active + Token Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            <ChartPanel title="Most active" subtitle="Requests per user">
               <ResponsiveContainer width="100%" height={Math.max(200, stats.requestsByUserData.length * 36 + 20)}>
                 <BarChart
                   data={stats.requestsByUserData}
@@ -271,21 +256,21 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                     type="category"
                     dataKey="shortEmail"
                     width={100}
-                    tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                    tick={{ fill: '#8A93A2', fontSize: 11, fontFamily: 'JetBrains Mono' }}
                     axisLine={false}
                     tickLine={false}
                   />
-                  <Tooltip content={<RequestTooltip />} cursor={{ fill: 'rgba(148,163,184,0.06)' }} />
+                  <Tooltip content={<RequestTooltip />} cursor={{ fill: 'rgba(94,234,212,0.05)' }} />
                   <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={22}>
                     {stats.requestsByUserData.map((_, i) => (
-                      <Cell key={i} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.85} />
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} fillOpacity={0.85} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
 
-            <ChartPanel title="Token Breakdown" subtitle="Tokens by type per user">
+            <ChartPanel title="Token breakdown" subtitle="Tokens by type per user">
               {stats.tokenData.length <= 8 ? (
                 <ResponsiveContainer width="100%" height={Math.max(200, stats.tokenData.length * 36 + 20)}>
                   <BarChart
@@ -299,15 +284,15 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                       type="category"
                       dataKey="shortEmail"
                       width={100}
-                      tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                      tick={{ fill: '#8A93A2', fontSize: 11, fontFamily: 'JetBrains Mono' }}
                       axisLine={false}
                       tickLine={false}
                     />
-                    <Tooltip content={<TokenTooltip />} cursor={{ fill: 'rgba(148,163,184,0.06)' }} />
-                    <Bar dataKey="input" stackId="t" fill="#06b6d4" fillOpacity={0.8} name="Input" maxBarSize={22} />
-                    <Bar dataKey="output" stackId="t" fill="#f59e0b" fillOpacity={0.8} name="Output" maxBarSize={22} />
-                    <Bar dataKey="cacheWrite" stackId="t" fill="#8b5cf6" fillOpacity={0.8} name="Cache Write" maxBarSize={22} />
-                    <Bar dataKey="cacheRead" stackId="t" fill="#10b981" fillOpacity={0.8} name="Cache Read" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                    <Tooltip content={<TokenTooltip />} cursor={{ fill: 'rgba(94,234,212,0.05)' }} />
+                    <Bar dataKey="input" stackId="t" fill={TOKEN_COLORS.input} fillOpacity={0.85} name="Input" maxBarSize={22} />
+                    <Bar dataKey="output" stackId="t" fill={TOKEN_COLORS.output} fillOpacity={0.85} name="Output" maxBarSize={22} />
+                    <Bar dataKey="cacheWrite" stackId="t" fill={TOKEN_COLORS.cacheWrite} fillOpacity={0.85} name="Cache Write" maxBarSize={22} />
+                    <Bar dataKey="cacheRead" stackId="t" fill={TOKEN_COLORS.cacheRead} fillOpacity={0.85} name="Cache Read" radius={[0, 4, 4, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -316,26 +301,26 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
                     data={stats.tokenData.map((t, i) => ({
                       name: t.shortEmail,
                       size: t.input + t.output + t.cacheWrite + t.cacheRead,
-                      fill: PALETTE[i % PALETTE.length],
+                      fill: CHART_COLORS[i % CHART_COLORS.length],
                     }))}
                     dataKey="size"
                     aspectRatio={4 / 3}
-                    stroke="rgb(30 41 59)"
+                    stroke="#161A21"
                     content={<TreemapCell x={0} y={0} width={0} height={0} />}
                   >
                     <Tooltip content={<TreemapTooltip />} />
                   </Treemap>
                 </ResponsiveContainer>
               )}
-              <div className="flex gap-4 mt-3 justify-center">
+              <div className="flex gap-4 mt-3 justify-center flex-wrap">
                 {[
-                  { label: 'Input', color: '#06b6d4' },
-                  { label: 'Output', color: '#f59e0b' },
-                  { label: 'Cache Write', color: '#8b5cf6' },
-                  { label: 'Cache Read', color: '#10b981' },
+                  { label: 'Input', color: TOKEN_COLORS.input },
+                  { label: 'Output', color: TOKEN_COLORS.output },
+                  { label: 'Cache Write', color: TOKEN_COLORS.cacheWrite },
+                  { label: 'Cache Read', color: TOKEN_COLORS.cacheRead },
                 ].map(l => (
-                  <div key={l.label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                    <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: l.color }} />
+                  <div key={l.label} className="flex items-center gap-1.5 text-[10px] text-app-mute">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
                     {l.label}
                   </div>
                 ))}
@@ -345,31 +330,31 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
         </div>
       ) : (
         /* Table View */
-        <div className="overflow-x-auto">
+        <div className="bg-app-surface-2/40 border border-app-line rounded-xl overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead>
-              <tr className="text-[11px] text-slate-500 uppercase tracking-wider border-b border-slate-700/60">
-                <th className="py-2.5 pr-3 font-medium">Email</th>
-                <th className="py-2.5 px-3 font-medium">Model</th>
-                <th className="py-2.5 px-3 font-medium text-right">Req</th>
-                <th className="py-2.5 px-3 font-medium text-right">Input</th>
-                <th className="py-2.5 px-3 font-medium text-right">Output</th>
-                <th className="py-2.5 px-3 font-medium text-right">Cache W</th>
-                <th className="py-2.5 px-3 font-medium text-right">Cache R</th>
-                <th className="py-2.5 pl-3 font-medium text-right">Cost</th>
+              <tr className="text-[10px] text-app-dim uppercase tracking-[0.14em] border-b border-app-line">
+                <th className="py-3 px-4 font-semibold">Email</th>
+                <th className="py-3 px-3 font-semibold">Model</th>
+                <th className="py-3 px-3 font-semibold text-right">Req</th>
+                <th className="py-3 px-3 font-semibold text-right">Input</th>
+                <th className="py-3 px-3 font-semibold text-right">Output</th>
+                <th className="py-3 px-3 font-semibold text-right">Cache W</th>
+                <th className="py-3 px-3 font-semibold text-right">Cache R</th>
+                <th className="py-3 px-4 font-semibold text-right">Cost</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u, i) => (
-                <tr key={`${u.email}-${u.model}-${i}`} className="border-b border-slate-700/30 hover:bg-slate-700/20 transition-colors">
-                  <td className="py-2 pr-3 text-slate-300 truncate max-w-48">{u.email}</td>
-                  <td className="py-2 px-3 text-slate-500 text-xs font-mono">{shortModel(u.model)}</td>
-                  <td className="py-2 px-3 text-right text-slate-400 font-mono text-xs">{u.request_count}</td>
-                  <td className="py-2 px-3 text-right text-slate-400 font-mono text-xs">{fmtTokens(u.input_tokens)}</td>
-                  <td className="py-2 px-3 text-right text-slate-400 font-mono text-xs">{fmtTokens(u.output_tokens)}</td>
-                  <td className="py-2 px-3 text-right text-slate-400 font-mono text-xs">{fmtTokens(u.cache_creation_tokens)}</td>
-                  <td className="py-2 px-3 text-right text-slate-400 font-mono text-xs">{fmtTokens(u.cache_read_tokens)}</td>
-                  <td className="py-2 pl-3 text-right text-emerald-400 font-mono text-xs font-medium">${u.total_cost_usd.toFixed(2)}</td>
+                <tr key={`${u.email}-${u.model}-${i}`} className="border-b border-app-line/60 last:border-0 hover:bg-app-surface/60 transition-colors">
+                  <td className="py-2.5 px-4 text-app-text truncate max-w-48">{u.email}</td>
+                  <td className="py-2.5 px-3 text-app-mute text-xs font-mono">{shortModel(u.model)}</td>
+                  <td className="py-2.5 px-3 text-right text-app-mute font-mono text-xs tabular-nums">{u.request_count}</td>
+                  <td className="py-2.5 px-3 text-right text-app-mute font-mono text-xs tabular-nums">{fmtTokens(u.input_tokens)}</td>
+                  <td className="py-2.5 px-3 text-right text-app-mute font-mono text-xs tabular-nums">{fmtTokens(u.output_tokens)}</td>
+                  <td className="py-2.5 px-3 text-right text-app-mute font-mono text-xs tabular-nums">{fmtTokens(u.cache_creation_tokens)}</td>
+                  <td className="py-2.5 px-3 text-right text-app-mute font-mono text-xs tabular-nums">{fmtTokens(u.cache_read_tokens)}</td>
+                  <td className="py-2.5 px-4 text-right text-app-accent font-mono text-xs font-medium tabular-nums">${u.total_cost_usd.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -382,21 +367,44 @@ export default function UsageDashboard({ users, loading }: UsageDashboardProps) 
 
 /* ---------- Sub-components ---------- */
 
-function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+function Segmented({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="bg-slate-900/50 border border-slate-700/40 rounded-lg px-4 py-3 group hover:border-slate-600/60 transition-colors">
-      <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-1 font-medium">{label}</p>
-      <p className={`text-xl font-mono font-semibold ${accent} tracking-tight`}>{value}</p>
+    <div className="inline-flex bg-app-surface-2 border border-app-line rounded-lg p-0.5">
+      {options.map(o => {
+        const isActive = value === o
+        return (
+          <button
+            key={o}
+            onClick={() => onChange(o)}
+            className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer border ${
+              isActive
+                ? 'bg-app-surface text-app-text border-app-line'
+                : 'bg-transparent text-app-mute border-transparent hover:text-app-text'
+            }`}
+          >
+            {o}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function Kpi({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className="bg-app-surface-2/60 border border-app-line rounded-xl px-4 py-3.5">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-app-dim mb-2 font-semibold">{label}</p>
+      <p className={`text-[26px] font-mono font-semibold ${accent} tabular-nums`} style={{ letterSpacing: '-0.02em' }}>{value}</p>
     </div>
   )
 }
 
 function ChartPanel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <div className="bg-slate-900/40 border border-slate-700/30 rounded-lg p-4">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-200">{title}</h3>
-        <p className="text-[10px] text-slate-500 mt-0.5">{subtitle}</p>
+    <div className="bg-app-surface-2/40 border border-app-line rounded-xl p-5">
+      <div className="mb-4">
+        <h3 className="text-[15px] font-semibold text-app-text">{title}</h3>
+        <p className="text-xs text-app-mute mt-0.5">{subtitle}</p>
       </div>
       {children}
     </div>
@@ -405,13 +413,17 @@ function ChartPanel({ title, subtitle, children }: { title: string; subtitle: st
 
 /* ---------- Tooltips ---------- */
 
+function tooltipBase(): string {
+  return 'bg-app-surface border border-app-line rounded-lg px-3 py-2 shadow-xl text-xs'
+}
+
 function CostTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { email: string; cost: number } }> }) {
   if (!active || !payload?.[0]) return null
   const d = payload[0].payload
   return (
-    <div className="bg-slate-800 border border-slate-600/50 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-slate-300 mb-1">{d.email}</p>
-      <p className="text-emerald-400 font-mono font-medium">${d.cost.toFixed(2)}</p>
+    <div className={tooltipBase()}>
+      <p className="text-app-text mb-1">{d.email}</p>
+      <p className="text-app-accent font-mono font-medium tabular-nums">${d.cost.toFixed(2)}</p>
     </div>
   )
 }
@@ -420,9 +432,9 @@ function RequestTooltip({ active, payload }: { active?: boolean; payload?: Array
   if (!active || !payload?.[0]) return null
   const d = payload[0].payload
   return (
-    <div className="bg-slate-800 border border-slate-600/50 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-slate-300 mb-1">{d.email}</p>
-      <p className="text-chart-cyan font-mono font-medium">{d.count.toLocaleString()} requests</p>
+    <div className={tooltipBase()}>
+      <p className="text-app-text mb-1">{d.email}</p>
+      <p className="text-chart-amber font-mono font-medium tabular-nums">{d.count.toLocaleString()} requests</p>
     </div>
   )
 }
@@ -431,10 +443,10 @@ function ModelTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.[0]) return null
   const d = payload[0].payload
   return (
-    <div className="bg-slate-800 border border-slate-600/50 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-slate-300 font-mono mb-1">{d.model}</p>
-      <p className="text-emerald-400 font-mono">${d.cost.toFixed(2)}</p>
-      <p className="text-slate-400">{d.requests.toLocaleString()} requests</p>
+    <div className={tooltipBase()}>
+      <p className="text-app-text font-mono mb-1">{d.model}</p>
+      <p className="text-app-accent font-mono tabular-nums">${d.cost.toFixed(2)}</p>
+      <p className="text-app-mute tabular-nums">{d.requests.toLocaleString()} requests</p>
     </div>
   )
 }
@@ -443,12 +455,12 @@ function TokenTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.[0]) return null
   const d = payload[0].payload
   return (
-    <div className="bg-slate-800 border border-slate-600/50 rounded-lg px-3 py-2 shadow-xl text-xs space-y-0.5">
-      <p className="text-slate-300 mb-1">{d.email}</p>
-      <p><span className="text-slate-500">Input:</span> <span className="text-chart-cyan font-mono">{fmtTokens(d.input)}</span></p>
-      <p><span className="text-slate-500">Output:</span> <span className="text-chart-amber font-mono">{fmtTokens(d.output)}</span></p>
-      <p><span className="text-slate-500">Cache W:</span> <span className="text-chart-violet font-mono">{fmtTokens(d.cacheWrite)}</span></p>
-      <p><span className="text-slate-500">Cache R:</span> <span className="text-chart-emerald font-mono">{fmtTokens(d.cacheRead)}</span></p>
+    <div className={`${tooltipBase()} space-y-0.5`}>
+      <p className="text-app-text mb-1">{d.email}</p>
+      <p><span className="text-app-dim">Input:</span> <span className="font-mono tabular-nums" style={{ color: TOKEN_COLORS.input }}>{fmtTokens(d.input)}</span></p>
+      <p><span className="text-app-dim">Output:</span> <span className="font-mono tabular-nums" style={{ color: TOKEN_COLORS.output }}>{fmtTokens(d.output)}</span></p>
+      <p><span className="text-app-dim">Cache W:</span> <span className="font-mono tabular-nums" style={{ color: TOKEN_COLORS.cacheWrite }}>{fmtTokens(d.cacheWrite)}</span></p>
+      <p><span className="text-app-dim">Cache R:</span> <span className="font-mono tabular-nums" style={{ color: TOKEN_COLORS.cacheRead }}>{fmtTokens(d.cacheRead)}</span></p>
     </div>
   )
 }
@@ -457,9 +469,9 @@ function TreemapTooltip({ active, payload }: { active?: boolean; payload?: Array
   if (!active || !payload?.[0]) return null
   const d = payload[0].payload
   return (
-    <div className="bg-slate-800 border border-slate-600/50 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-slate-300 mb-1">{d.name}</p>
-      <p className="text-chart-cyan font-mono">{fmtTokens(d.size)} tokens</p>
+    <div className={tooltipBase()}>
+      <p className="text-app-text mb-1">{d.name}</p>
+      <p className="text-app-accent font-mono tabular-nums">{fmtTokens(d.size)} tokens</p>
     </div>
   )
 }
@@ -469,9 +481,9 @@ function TreemapCell(props: { x: number; y: number; width: number; height: numbe
   if (width < 4 || height < 4) return null
   return (
     <g>
-      <rect x={x} y={y} width={width} height={height} rx={4} fill={fill} fillOpacity={0.75} stroke="rgb(30 41 59)" strokeWidth={2} />
+      <rect x={x} y={y} width={width} height={height} rx={4} fill={fill} fillOpacity={0.75} stroke="#161A21" strokeWidth={2} />
       {width > 40 && height > 24 && (
-        <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="#e2e8f0" fontSize={11} fontFamily="JetBrains Mono">
+        <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="#E6E9EE" fontSize={11} fontFamily="JetBrains Mono">
           {name}
         </text>
       )}

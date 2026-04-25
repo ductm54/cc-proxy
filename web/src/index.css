@@ -1,15 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'DM Sans', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-  --color-chart-cyan: #06b6d4;
-  --color-chart-amber: #f59e0b;
-  --color-chart-violet: #8b5cf6;
+  /* Option A — Calm & Spacious palette */
+  --color-app-bg: #0E1116;
+  --color-app-surface: #161A21;
+  --color-app-surface-2: #1B2029;
+  --color-app-line: #252B36;
+  --color-app-text: #E6E9EE;
+  --color-app-mute: #8A93A2;
+  --color-app-dim: #5C6473;
+  --color-app-accent: #5EEAD4;
+  --color-app-accent-deep: #3FB6C5;
+  --color-app-code-bg: #0A0D12;
+
+  --color-chart-cyan: #5EEAD4;
+  --color-chart-amber: #F2B45A;
+  --color-chart-violet: #A78BFA;
+  --color-chart-sky: #7DD3FC;
   --color-chart-rose: #f43f5e;
   --color-chart-emerald: #10b981;
-  --color-chart-sky: #0ea5e9;
   --color-chart-orange: #f97316;
   --color-chart-pink: #ec4899;
 }
