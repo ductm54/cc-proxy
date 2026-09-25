@@ -14,6 +14,11 @@ var pricing = []struct {
 	prefix  string
 	pricing modelPricing
 }{
+	{"claude-fable-5-0", modelPricing{10.00, 50.00, 12.25, 1.00}},
+	{"claude-opus-5-5", modelPricing{4.00, 20, 5.0, 0.20}},
+	{"claude-opus-5-0", modelPricing{5.00, 25, 6.25, 0.50}},
+	{"claude-sonnet-5-0", modelPricing{2.00, 10.00, 2.4, 0.20}},
+	{"claude-opus-4-8", modelPricing{5.00, 25.00, 6.25, 0.50}},
 	{"claude-opus-4-7", modelPricing{5.00, 25.00, 6.25, 0.50}},
 	{"claude-opus-4-6", modelPricing{5.00, 25.00, 6.25, 0.50}},
 	{"claude-opus-4-5", modelPricing{5.00, 25.00, 6.25, 0.50}},

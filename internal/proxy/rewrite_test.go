@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +70,64 @@ func TestRewriteAccountUUID(t *testing.T) {
 		out, err := rewriteAccountUUID(in, want)
 		if err != nil {
 			t.Fatalf("err: %v", err)
+		}
+		if string(out) != string(in) {
+			t.Errorf("body should be unchanged")
+		}
+	})
+
+	t.Run("only the user_id literal changes", func(t *testing.T) {
+		in := `{"model":"x", "messages":[{"role":"user","content":"<system-reminder>a & b</system-reminder>"}],` +
+			"\n  " + `"metadata":{"user_id":"{\"device_id\":\"d\",\"account_uuid\":\"stale\",\"session_id\":\"s\"}"},"stream":true}`
+		out, err := rewriteAccountUUID([]byte(in), want)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		wantOut := strings.Replace(in, "stale", want, 1)
+		if string(out) != wantOut {
+			t.Errorf("got  %s\nwant %s", out, wantOut)
+		}
+	})
+
+	t.Run("already correct — byte-identical", func(t *testing.T) {
+		in := []byte(`{"metadata":{"user_id":"{\"device_id\":\"d\",\"account_uuid\":\"` + want + `\"}"},"x":"<a>"}`)
+		out, err := rewriteAccountUUID(in, want)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if &out[0] != &in[0] || string(out) != string(in) {
+			t.Errorf("body should be returned unchanged, got %s", out)
+		}
+	})
+
+	t.Run("injects account_uuid keeping inner order", func(t *testing.T) {
+		in := []byte(`{"metadata":{"user_id":"{\"session_id\":\"s\",\"device_id\":\"d\"}"}}`)
+		out, err := rewriteAccountUUID(in, want)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		wantOut := `{"metadata":{"user_id":"{\"session_id\":\"s\",\"device_id\":\"d\",\"account_uuid\":\"` + want + `\"}"}}`
+		if string(out) != wantOut {
+			t.Errorf("got  %s\nwant %s", out, wantOut)
+		}
+	})
+
+	t.Run("empty user_id object", func(t *testing.T) {
+		in := []byte(`{"metadata":{"user_id":"{}"}}`)
+		out, err := rewriteAccountUUID(in, want)
+		if err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		if got := extractAccountUUID(t, out); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("invalid user_id JSON — returns original with error", func(t *testing.T) {
+		in := []byte(`{"metadata":{"user_id":"not-json"}}`)
+		out, err := rewriteAccountUUID(in, want)
+		if err == nil {
+			t.Errorf("expected error for invalid user_id")
 		}
 		if string(out) != string(in) {
 			t.Errorf("body should be unchanged")

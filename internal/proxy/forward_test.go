@@ -72,7 +72,7 @@ func TestHandleMessages_HeaderRewrite(t *testing.T) {
 		t.Errorf("Authorization: got %q, want %q", got, want)
 	}
 
-	// anthropic-beta must be the subscription list.
+	// With no client betas, anthropic-beta falls back to the subscription list.
 	if capturedHeaders.Get("Anthropic-Beta") != SubscriptionBetaList {
 		t.Errorf("Anthropic-Beta: got %q", capturedHeaders.Get("Anthropic-Beta"))
 	}
@@ -122,12 +122,60 @@ func TestShouldForward(t *testing.T) {
 		{"Anthropic-Beta", false},
 		{"Connection", false},
 		{"Transfer-Encoding", false},
+		{"Cf-Ray", false},
+		{"Cf-Connecting-Ip", false},
+		{"Cdn-Loop", false},
+		{"X-Forwarded-For", false},
+		{"X-Forwarded-Proto", false},
 	}
 	for _, tc := range cases {
 		got := shouldForward(tc.key)
 		if got != tc.want {
 			t.Errorf("shouldForward(%q) = %v, want %v", tc.key, got, tc.want)
 		}
+	}
+}
+
+func TestMergeBetas(t *testing.T) {
+	cases := []struct {
+		name   string
+		client []string
+		want   string
+	}{
+		{"adds required in front", []string{"safeguards-x,per-turn-y"}, "claude-code-20250219,oauth-2025-04-20,safeguards-x,per-turn-y"},
+		{"keeps client order", []string{"a,oauth-2025-04-20,b,claude-code-20250219"}, "a,oauth-2025-04-20,b,claude-code-20250219"},
+		{"only missing required", []string{"oauth-2025-04-20, a"}, "claude-code-20250219,oauth-2025-04-20,a"},
+		{"dedupes across values", []string{"a,b", "b,c,"}, "claude-code-20250219,oauth-2025-04-20,a,b,c"},
+	}
+	for _, tc := range cases {
+		if got := mergeBetas(tc.client, RequiredMessagesBetas); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestHandleMessages_KeepsClientBetas(t *testing.T) {
+	var capturedHeaders http.Header
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer upstream.Close()
+
+	handler, _ := New(&fakeTokenProvider{tok: newTestToken()}, zap.NewNop(), Options{MessagesURL: upstream.URL + "/v1/messages"})
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(`{}`))
+	req.Header.Set("Anthropic-Beta", "oauth-2025-04-20,dangerous-tool-use-2026-09-03,per-turn-control-2026-07-01")
+	req.Header.Set("Cf-Ray", "abc-SIN")
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	want := "claude-code-20250219,oauth-2025-04-20,dangerous-tool-use-2026-09-03,per-turn-control-2026-07-01"
+	if got := capturedHeaders.Get("Anthropic-Beta"); got != want {
+		t.Errorf("Anthropic-Beta: got %q, want %q", got, want)
+	}
+	if capturedHeaders.Get("Cf-Ray") != "" || capturedHeaders.Get("X-Forwarded-For") != "" {
+		t.Errorf("front-proxy headers leaked upstream: %v", capturedHeaders)
 	}
 }
 

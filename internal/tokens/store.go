@@ -9,7 +9,6 @@ import (
 )
 
 // Token is the in-memory OAuth token state.
-// AccountUUID is proxy-specific and kept in memory only.
 type Token struct {
 	AccessToken  string
 	RefreshToken string
@@ -21,6 +20,7 @@ type Token struct {
 // both reading and writing so the proxy and Claude Code stay compatible.
 type credentialsFile struct {
 	ClaudeAiOauth credentialsOauth `json:"claudeAiOauth"`
+	Proxy         proxyExtras      `json:"proxy,omitempty"`
 }
 
 type credentialsOauth struct {
@@ -28,6 +28,11 @@ type credentialsOauth struct {
 	RefreshToken string   `json:"refreshToken"`
 	ExpiresAt    int64    `json:"expiresAt"`
 	Scopes       []string `json:"scopes"`
+}
+
+// proxyExtras holds cc-proxy-specific fields that Claude Code ignores.
+type proxyExtras struct {
+	AccountUUID string `json:"account_uuid,omitempty"`
 }
 
 // Load reads a Token from path in Claude Code .credentials.json format.
@@ -45,6 +50,7 @@ func Load(path string) (Token, error) {
 		AccessToken:  cf.ClaudeAiOauth.AccessToken,
 		RefreshToken: cf.ClaudeAiOauth.RefreshToken,
 		ExpiresAt:    time.UnixMilli(cf.ClaudeAiOauth.ExpiresAt),
+		AccountUUID:  cf.Proxy.AccountUUID,
 	}
 	if t.AccessToken == "" || t.RefreshToken == "" {
 		return Token{}, fmt.Errorf("tokens file %s is missing accessToken or refreshToken", path)
@@ -67,6 +73,9 @@ func Save(path string, t Token) error {
 	cf.ClaudeAiOauth.AccessToken = t.AccessToken
 	cf.ClaudeAiOauth.RefreshToken = t.RefreshToken
 	cf.ClaudeAiOauth.ExpiresAt = t.ExpiresAt.UnixMilli()
+	if t.AccountUUID != "" {
+		cf.Proxy.AccountUUID = t.AccountUUID
+	}
 
 	b, err := json.MarshalIndent(cf, "", "  ")
 	if err != nil {

@@ -22,6 +22,9 @@ type AuthConfig struct {
 	OAuthDomain       string `json:"oauth_domain"`
 	AuthTokenTTL      string `json:"auth_token_ttl"`
 	ExternalURL       string `json:"external_url"`
+	// AuthSecret enables the /k/{key} routes, which accept this static key
+	// in the URL path instead of an OAuth session token.
+	AuthSecret string `json:"auth_secret"`
 
 	// Resolved TTL (not serialised).
 	TokenTTL time.Duration `json:"-"`
@@ -30,6 +33,11 @@ type AuthConfig struct {
 // Enabled returns true when OAuth authentication is configured.
 func (a *AuthConfig) Enabled() bool {
 	return a != nil && a.OAuthClientID != ""
+}
+
+// KeyEnabled returns true when static-key authentication is configured.
+func (a *AuthConfig) KeyEnabled() bool {
+	return a != nil && a.AuthSecret != ""
 }
 
 // RedirectURL returns the OAuth2 callback URL.

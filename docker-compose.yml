@@ -10,6 +10,10 @@ services:
       - "29000:9000"
     volumes:
       - .volumes/clickhouse:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
       interval: 5s
@@ -27,6 +31,9 @@ services:
       CC_PROXY_TOKENS_FILE: /data/.credentials.json
       CC_PROXY_AUTH_CONFIG: /data/auth.json
       CC_PROXY_CLICKHOUSE_DSN: "clickhouse://user:password@clickhouse:9000/cc_proxy"
+      CC_PROXY_DEBUG_DUMP_DIR: /data/dumps
+      CC_PROXY_DEBUG_DUMP_MAX_SIZE_MB: "500"
+      CC_PROXY_DEBUG_DUMP_MAX_FILES: "5"
     volumes:
       - .config:/data
     depends_on:

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
 	"github.com/ductm54/cc-proxy/internal/auth"
@@ -40,16 +41,76 @@ var overriddenByProxy = map[string]bool{
 	http.CanonicalHeaderKey(HeaderXApiKey):       true,
 }
 
+// addedByFrontProxy are headers injected by a tunnel or CDN in front of
+// cc-proxy (e.g. Cloudflare). Real Claude Code traffic never carries them.
+var addedByFrontProxy = map[string]bool{
+	"Cdn-Loop":          true,
+	"Forwarded":         true,
+	"True-Client-Ip":    true,
+	"X-Forwarded-For":   true,
+	"X-Forwarded-Host":  true,
+	"X-Forwarded-Proto": true,
+	"X-Real-Ip":         true,
+}
+
 // shouldForward returns true for headers that the proxy passes through
 // from the client to upstream.
 func shouldForward(key string) bool {
 	canon := http.CanonicalHeaderKey(key)
-	if hopByHop[canon] || overriddenByProxy[canon] {
+	if hopByHop[canon] || overriddenByProxy[canon] || addedByFrontProxy[canon] || strings.HasPrefix(canon, "Cf-") {
 		return false
 	}
 	// Allow Content-Type, Accept, Content-Length, X-Stainless-*, and anything else
 	// that hasn't been explicitly excluded.
 	return true
+}
+
+// mergeBetas returns the client's anthropic-beta flags with any missing
+// required flags prepended, deduplicated and in order.
+func mergeBetas(client []string, required string) string {
+	var flags []string
+	for _, v := range client {
+		for _, b := range strings.Split(v, ",") {
+			if b = strings.TrimSpace(b); b != "" {
+				flags = append(flags, b)
+			}
+		}
+	}
+	seen := make(map[string]bool)
+	var out []string
+	add := func(b string) {
+		if !seen[b] {
+			seen[b] = true
+			out = append(out, b)
+		}
+	}
+	for _, b := range strings.Split(required, ",") {
+		if !contains(flags, b) {
+			add(b)
+		}
+	}
+	for _, b := range flags {
+		add(b)
+	}
+	return strings.Join(out, ",")
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// messagesBetas picks the anthropic-beta value for a /v1/messages request.
+func messagesBetas(h http.Header) string {
+	client := h.Values(HeaderAnthropicBeta)
+	if len(client) == 0 {
+		return SubscriptionBetaList
+	}
+	return mergeBetas(client, RequiredMessagesBetas)
 }
 
 // handleMessages forwards a POST /v1/messages request to upstream.
@@ -71,6 +132,9 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		Model string `json:"model"`
 	}
 	_ = json.Unmarshal(bodyBytes, &reqBody)
+
+	dump := s.startDump(r, bodyBytes)
+	defer dump.finish()
 
 	if tok.AccountUUID != "" {
 		rewritten, rerr := rewriteAccountUUID(bodyBytes, tok.AccountUUID)
@@ -96,16 +160,22 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	up.Header.Set(HeaderAuthorization, "Bearer "+tok.AccessToken)
-	up.Header.Set(HeaderAnthropicBeta, SubscriptionBetaList)
+	up.Header.Set(HeaderAnthropicBeta, messagesBetas(r.Header))
 	up.Header.Set(HeaderContentLength, strconv.Itoa(len(bodyBytes)))
 	up.Header.Del(HeaderXApiKey)
+	// Strip Accept-Encoding so Go's transport handles decompression transparently.
+	// Without this, gzip-compressed SSE responses cannot be parsed for usage.
+	up.Header.Del("Accept-Encoding")
+	dump.upstream(up, bodyBytes)
 
 	resp, err := s.http.Do(up)
 	if err != nil {
+		dump.fail(err)
 		writeErrJSON(w, http.StatusBadGateway, "cc_proxy_upstream", err.Error())
 		return
 	}
 	defer resp.Body.Close()
+	dump.response(resp)
 
 	copyRespHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)
@@ -153,7 +223,7 @@ func streamCopyWithUsage(w http.ResponseWriter, body io.Reader) usage.TokenUsage
 
 func parseSSEUsage(r io.Reader) usage.TokenUsage {
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 
 	var tu usage.TokenUsage
 	for scanner.Scan() {
@@ -224,14 +294,21 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	up.Header.Set(HeaderAuthorization, "Bearer "+tok.AccessToken)
+	up.Header.Set(HeaderAnthropicBeta, mergeBetas(r.Header.Values(HeaderAnthropicBeta), UsageBetaValue))
 	up.Header.Del(HeaderXApiKey)
+
+	dump := s.startDump(r, nil)
+	defer dump.finish()
+	dump.upstream(up, nil)
 
 	resp, err := s.http.Do(up)
 	if err != nil {
+		dump.fail(err)
 		writeErrJSON(w, http.StatusBadGateway, "cc_proxy_upstream", err.Error())
 		return
 	}
 	defer resp.Body.Close()
+	dump.response(resp)
 
 	copyRespHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)
@@ -259,12 +336,31 @@ func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetURL := s.upstreamBase + r.URL.RequestURI()
+	// Rebuild the path from the wildcard so route prefixes like /p/{token}
+	// or /k/{key} are never forwarded upstream.
+	targetURL := s.upstreamBase + "/v1/" + chi.URLParam(r, "*")
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
 
 	var body io.Reader
 	if r.Body != nil {
 		body = r.Body
 	}
+
+	// Buffer the body only when dumping, so the normal path keeps streaming.
+	var dumpBody []byte
+	if s.dump != nil && r.Body != nil {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeErrJSON(w, http.StatusBadGateway, "cc_proxy_internal", err.Error())
+			return
+		}
+		dumpBody = b
+		body = bytes.NewReader(b)
+	}
+	dump := s.startDump(r, dumpBody)
+	defer dump.finish()
 
 	up, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, body)
 	if err != nil {
@@ -278,19 +374,23 @@ func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	up.Header.Set(HeaderAuthorization, "Bearer "+tok.AccessToken)
+	up.Header.Set(HeaderAnthropicBeta, mergeBetas(r.Header.Values(HeaderAnthropicBeta), UsageBetaValue))
 	up.Header.Del(HeaderXApiKey)
 	if r.ContentLength > 0 {
 		up.ContentLength = r.ContentLength
 	}
 
 	s.log.Info("catch-all forward", zap.String("method", r.Method), zap.String("url", targetURL))
+	dump.upstream(up, dumpBody)
 
 	resp, err := s.http.Do(up)
 	if err != nil {
+		dump.fail(err)
 		writeErrJSON(w, http.StatusBadGateway, "cc_proxy_upstream", err.Error())
 		return
 	}
 	defer resp.Body.Close()
+	dump.response(resp)
 
 	copyRespHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)

@@ -81,6 +81,23 @@ func (m *Manager) maybeRefresh(ctx context.Context) {
 	m.mu.RUnlock()
 
 	if time.Until(tok.ExpiresAt) > m.refreshSkew {
+		if tok.AccountUUID == "" {
+			m.mu.RLock()
+			profileURL := m.profileURL
+			m.mu.RUnlock()
+			if uuid, err := FetchProfile(ctx, m.client, profileURL, tok.AccessToken); err == nil {
+				m.mu.Lock()
+				m.current.AccountUUID = uuid
+				saved := m.current
+				m.mu.Unlock()
+				m.log.Info("fetched account uuid", zap.String("uuid", uuid))
+				if saveErr := Save(m.tokensPath, saved); saveErr != nil {
+					m.log.Warn("failed to persist account uuid", zap.Error(saveErr))
+				}
+			} else {
+				m.log.Warn("fetch account profile failed", zap.Error(err))
+			}
+		}
 		return
 	}
 

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,7 +19,7 @@ func zapLogger(log *zap.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 			fields := []zap.Field{
 				zap.String("method", r.Method),
-				zap.String("path", r.URL.Path),
+				zap.String("path", redactPath(r.URL.Path)),
 				zap.Int("status", ww.Status()),
 				zap.Int64("dur_ms", time.Since(start).Milliseconds()),
 				zap.String("req_id", middleware.GetReqID(r.Context())),
@@ -29,4 +30,16 @@ func zapLogger(log *zap.Logger) func(http.Handler) http.Handler {
 			log.Info("request", fields...)
 		})
 	}
+}
+
+// redactPath hides the static key in /k/{key}/... paths so it never lands in logs.
+func redactPath(p string) string {
+	rest, ok := strings.CutPrefix(p, "/k/")
+	if !ok {
+		return p
+	}
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		return "/k/REDACTED" + rest[i:]
+	}
+	return "/k/REDACTED"
 }

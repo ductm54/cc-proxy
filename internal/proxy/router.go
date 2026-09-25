@@ -14,6 +14,7 @@ import (
 
 	"github.com/ductm54/cc-proxy/internal/auth"
 	"github.com/ductm54/cc-proxy/internal/config"
+	"github.com/ductm54/cc-proxy/internal/debugdump"
 	"github.com/ductm54/cc-proxy/internal/tokens"
 	"github.com/ductm54/cc-proxy/internal/usage"
 )
@@ -29,6 +30,7 @@ type Server struct {
 	http         *http.Client
 	log          *zap.Logger
 	usage        *usage.Store
+	dump         *debugdump.Dumper
 	messagesURL  string
 	modelsURL    string
 	upstreamBase string
@@ -48,6 +50,8 @@ type Options struct {
 	WebFS fs.FS
 	// UsageStore enables per-user usage tracking when non-nil.
 	UsageStore *usage.Store
+	// DebugDump records full request/response exchanges when non-nil.
+	DebugDump *debugdump.Dumper
 }
 
 // New creates a Server and returns its chi.Router.
@@ -83,6 +87,7 @@ func New(tp TokenProvider, log *zap.Logger, opts Options) (http.Handler, *Server
 		http:         &http.Client{Transport: transport},
 		log:          log,
 		usage:        opts.UsageStore,
+		dump:         opts.DebugDump,
 		messagesURL:  messagesURL,
 		modelsURL:    modelsURL,
 		upstreamBase: upstreamBase,
@@ -139,6 +144,21 @@ func New(tp TokenProvider, log *zap.Logger, opts Options) (http.Handler, *Server
 		}
 	}
 
+	if opts.AuthConfig.KeyEnabled() {
+		r.Route("/k/{key}", func(r chi.Router) {
+			r.Use(auth.RequirePathKey(opts.AuthConfig.AuthSecret, log))
+			r.Get("/api/test", s.handleKeyTest)
+			r.Post("/v1/messages", s.handleMessages)
+			r.Get("/v1/models", s.handleModels)
+			r.HandleFunc("/v1/*", s.handleCatchAll)
+			r.Get("/api/account", s.handleAccountInfo)
+			if s.usage != nil {
+				r.Get("/api/usage", s.handleUsageSummary)
+				r.Get("/api/usage/{email}", s.handleUsageByEmail)
+			}
+		})
+	}
+
 	if opts.WebFS != nil {
 		r.NotFound(spaHandler(opts.WebFS))
 	}
@@ -170,6 +190,25 @@ func handleSession(w http.ResponseWriter, r *http.Request) {
 	email := auth.GetUserEmail(r.Context())
 	w.Header().Set(HeaderContentType, "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"email": email})
+}
+
+// handleKeyTest confirms the key is accepted and reports whether the proxy
+// can serve requests, without calling upstream.
+func (s *Server) handleKeyTest(w http.ResponseWriter, r *http.Request) {
+	tok, err := s.tokens.Current()
+	resp := map[string]any{
+		"ok":             true,
+		"user":           auth.GetUserEmail(r.Context()),
+		"upstream_ready": tok.AccessToken != "",
+	}
+	if tok.AccessToken != "" {
+		resp["expires_in_seconds"] = int(time.Until(tok.ExpiresAt).Seconds())
+	}
+	if err != nil {
+		resp["upstream_error"] = err.Error()
+	}
+	w.Header().Set(HeaderContentType, "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func spaHandler(webFS fs.FS) http.HandlerFunc {

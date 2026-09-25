@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ductm54/cc-proxy/internal/config"
+	"github.com/ductm54/cc-proxy/internal/debugdump"
 	"github.com/ductm54/cc-proxy/internal/logging"
 	"github.com/ductm54/cc-proxy/internal/proxy"
 	"github.com/ductm54/cc-proxy/internal/tokens"
@@ -121,6 +122,11 @@ func serveCmd() *cli.Command {
 				Sources: cli.EnvVars("CC_PROXY_AUTH_TOKEN_TTL"),
 			},
 			&cli.StringFlag{
+				Name:    "auth-secret",
+				Usage:   "Static key accepted on /k/{key}/... routes (alternative to OAuth)",
+				Sources: cli.EnvVars("CC_PROXY_AUTH_SECRET"),
+			},
+			&cli.StringFlag{
 				Name:    "external-url",
 				Usage:   "Public URL of the proxy (for OAuth redirect URI)",
 				Sources: cli.EnvVars("CC_PROXY_EXTERNAL_URL"),
@@ -130,6 +136,23 @@ func serveCmd() *cli.Command {
 				Usage:   "ClickHouse DSN for usage tracking (e.g. clickhouse://localhost:9000/cc_proxy)",
 				Sources: cli.EnvVars("CC_PROXY_CLICKHOUSE_DSN"),
 				Value:   "clickhouse://user:password@localhost:29000/cc_proxy",
+			},
+			&cli.StringFlag{
+				Name:    "debug-dump-dir",
+				Usage:   "Write full request/response exchanges as JSONL into this directory (disabled when empty)",
+				Sources: cli.EnvVars("CC_PROXY_DEBUG_DUMP_DIR"),
+			},
+			&cli.IntFlag{
+				Name:    "debug-dump-max-size-mb",
+				Usage:   "Rotate the debug dump file once it reaches this size",
+				Value:   500,
+				Sources: cli.EnvVars("CC_PROXY_DEBUG_DUMP_MAX_SIZE_MB"),
+			},
+			&cli.IntFlag{
+				Name:    "debug-dump-max-files",
+				Usage:   "Number of rotated debug dump files to keep (0 keeps all)",
+				Value:   5,
+				Sources: cli.EnvVars("CC_PROXY_DEBUG_DUMP_MAX_FILES"),
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -174,7 +197,22 @@ func serveCmd() *cli.Command {
 				return fmt.Errorf("load web assets: %w", err)
 			}
 
-			handler, _ := proxy.New(mgr, log, proxy.Options{AuthConfig: authCfg, WebFS: webFS, UsageStore: usageStore})
+			var dumper *debugdump.Dumper
+			if dir := cmd.String("debug-dump-dir"); dir != "" {
+				maxMB := cmd.Int("debug-dump-max-size-mb")
+				dumper, err = debugdump.New(dir, int64(maxMB)<<20, cmd.Int("debug-dump-max-files"))
+				if err != nil {
+					return fmt.Errorf("init debug dump: %w", err)
+				}
+				defer dumper.Close()
+				log.Warn("debug dump enabled — full prompts and responses are written to disk",
+					zap.String("dir", dir),
+					zap.Int("max_size_mb", maxMB),
+					zap.Int("max_files", cmd.Int("debug-dump-max-files")),
+				)
+			}
+
+			handler, _ := proxy.New(mgr, log, proxy.Options{AuthConfig: authCfg, WebFS: webFS, UsageStore: usageStore, DebugDump: dumper})
 
 			srv := &http.Server{
 				Addr:              addr,
@@ -221,8 +259,15 @@ func buildAuthConfig(cmd *cli.Command, addr string, log *zap.Logger) (*config.Au
 		cfg.AuthTokenTTL = cmd.Duration("auth-token-ttl").String()
 	}
 
+	if v := cmd.String("auth-secret"); v != "" {
+		cfg.AuthSecret = v
+	}
+	if cfg.KeyEnabled() {
+		log.Info("static key auth enabled", zap.String("route", "/k/{key}"))
+	}
+
 	if !cfg.Enabled() {
-		return nil, nil
+		return cfg, nil
 	}
 
 	if cfg.OAuthClientSecret == "" {

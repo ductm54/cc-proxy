@@ -5,3 +5,5 @@
 web/dist
 web/node_modules
 /cc-proxy
+captures
+scripts/cc-capture/__pycache__
